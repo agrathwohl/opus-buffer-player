@@ -1,0 +1,41 @@
+<html>
+<head></head>
+<body>
+<button id="b" onclick="sendMessage()">clicky</button>
+<script type="text/javascript" src="feeddecoder.js"></script>
+<script>
+	async function main () {
+	const FD = FeedDecoder.default
+	const decoder = new FD()
+	await decoder._onNewMessage('https://pkg.storyboardtesting.com/audio/poppclip.opus')
+	console.log(decoder)
+
+    decoder.playMessage('https://pkg.storyboardtesting.com/audio/poppclip.opus')
+	}
+
+
+    console.log('sup')
+
+    const worker = new Worker('decodeworker.js')
+    console.log(worker)
+
+
+    function sendMessage() {
+        worker.onmessage = async function (chunksMessage) {
+            console.log('worker sent us chunks', chunksMessage)
+            const chunks = chunksMessage.data
+            const FD = FeedDecoder.default
+            const decoder = new FD()
+            console.log(decoder)
+
+            const buf = await decoder._onNewMessageChunks(chunks)
+            console.log(buf)
+
+            decoder._playBuffer(buf)
+        }
+        worker.postMessage({url:'https://pkg.storyboardtesting.com/audio/poppclip.opus'})
+    }
+
+</script>
+</body>
+</html>
