@@ -41,4 +41,8 @@ function readChunks(reader) {
     }
 }
 
-export default onMessage
+onmessage = async function (event) {
+    console.log('new message', event)
+    const decoded = await onMessage(event.data.url)
+    postMessage(decoded)
+}
