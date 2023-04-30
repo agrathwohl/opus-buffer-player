@@ -31,7 +31,7 @@ class FeedDecoder {
     async _onNewMessage(url) {
         const opusChunks = await onMessage(url)
         this.messages[url] = await this._onNewMessageChunks(opusChunks)
-        this.e.emit('new-message')
+        this.e.emit('canplaythrough', url)
         // TODO dispatch 'new-message' event
     }
     async _onNewMessageChunks(chunks) {
@@ -39,7 +39,6 @@ class FeedDecoder {
         const bufs = new AudioBufferList(
             chunks.map(c => abf(c.channelData[0], { sampleRate: 48000 }))
         )
-        this.e.emit('message-ready')
         return bufs.join()
         // TODO dispatch 'message-ready' event
     }
@@ -58,7 +57,6 @@ class FeedDecoder {
      * it should eventually call this method to ensure underlying logic.
      */
     _startSrcNode(when=0, seek=0) {
-        // TODO: 'play' event
         if (!this.srcNode) return
         this._prepareCtx()
         const oldProgress = this.progress
@@ -135,7 +133,7 @@ class FeedDecoder {
         newSrcNode.buffer = bufferToSeek
         newSrcNode.connect(this.ctx.destination)
         this.srcNode = newSrcNode
-        this._startSrcNode(0, seek + this.playhead)
+        this._startSrcNode(0 + this.ctx.baseLatency, seek + this.playhead)
     }
     _startProgressTracker() {
         const startTime = this.ctx.getOutputTimestamp().contextTime
