@@ -1,19 +1,11 @@
 <html>
 <head></head>
 <body>
+<label for="opusurl">URL to your opus:</label>
+<input type="url" id="opusurl" name="opusurl"> 
 <button id="b" onclick="sendMessage()">clicky</button>
 <script type="text/javascript" src="feeddecoder.js"></script>
 <script>
-	async function main () {
-	const FD = FeedDecoder.default
-	const decoder = new FD()
-	await decoder._onNewMessage('https://pkg.storyboardtesting.com/audio/poppclip.opus')
-	console.log(decoder)
-
-    decoder.playMessage('https://pkg.storyboardtesting.com/audio/poppclip.opus')
-	}
-
-
     console.log('sup')
 
     const worker = new Worker('decodeworker.js')
@@ -33,7 +25,7 @@
 
             decoder._playBuffer(buf)
         }
-        worker.postMessage({url:'https://pkg.storyboardtesting.com/audio/poppclip.opus'})
+        worker.postMessage({url: document.getElementById('opusurl').value || 'https://pkg.storyboardtesting.com/audio/poppclip.opus'})
     }
 
 </script>
