@@ -99,13 +99,14 @@ class FeedDecoder {
     }
     _seekBuffer(seek) {
         if (!this.srcNode) return
-        this.srcNode.stop()
+        this._pauseBuffer()
+        // this.srcNode.stop()
         const bufferToSeek = this.srcNode.buffer
         const newSrcNode = this.ctx.createBufferSource()
         newSrcNode.buffer = bufferToSeek
         newSrcNode.connect(this.ctx.destination)
         this.srcNode = newSrcNode
-        this._startSrcNode(0, seek)
+        this._startSrcNode(0, seek + this.progress)
     }
 }
 
