@@ -105,9 +105,6 @@ decoder.e.on('seek', () => console.log('seek emitted'))
 - [x] `play`
 - [x] `pause`
 - [x] `stop`
-- [ ] `canplay`/`canplaythrough`
+- [x] `canplay`/`canplaythrough`
 - [ ] `waiting`
 - [x] `seeked`
-#### `CustomEvent`
-- [x] `new-message`
-- [x] `message-ready`
