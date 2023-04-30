@@ -10,6 +10,8 @@
 <button id="b3" onclick="seekDuringPlay()">seeky</button>
 <button id="b4" onclick="pauseDuringPlay()">pausy</button>
 <button id="b5" onclick="resumePlayback()">resumy</button>
+<br><br>
+<p id="playhead">0</p>
 <script type="text/javascript" src="feeddecoder.js"></script>
 <script>
     console.log('sup')
@@ -32,6 +34,7 @@
     decoder.e.on('seeked', () => {
         console.log('decoder emitted SEEKED event')
     })
+    // decoder.e.on('timeupdate', (time) => document.getElementById('playhead').innerHTML = `${time}`)
 
     function seekDuringPlay() {
         console.log('seeking to 15s during playback')
@@ -64,6 +67,11 @@
             console.log(startValue)
 
             decoder._playBuffer(buf, startValue)
+            try {
+                decoder._startProgressTracker()
+            } catch (err) {
+                console.error(err)
+            }
         }
         worker.postMessage({url: document.getElementById('opusurl').value || 'https://pkg.storyboardtesting.com/audio/poppclip.opus'})
     }

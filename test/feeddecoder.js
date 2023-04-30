@@ -126,14 +126,14 @@ var FeedDecoder = /*#__PURE__*/function () {
       if (!this.srcNode) return;
       this._prepareCtx();
       var oldProgress = this.progress;
-      console.log(oldProgress, 'old progress');
       this.srcNode.start(when, seek);
       this.progress = seek;
-      console.log(this.progress, 'new progress');
       if (this.paused) this.paused = false;
       this.ctx.newEvent('streamplayer-play');
       if (oldProgress !== this.progress) this.e.emit('seeked');
+      this._startProgressTracker();
       this.e.emit('play');
+      this.playing = true;
     }
   }, {
     key: "_stopBuffer",
@@ -150,7 +150,9 @@ var FeedDecoder = /*#__PURE__*/function () {
         _this.played.add(begin - begin, end - begin);
         _this.progress = 0;
         _this.e.emit('stop');
+        _this.playing = false;
       };
+      cancelAnimationFrame(this.rAF);
       this.srcNode.stop();
     }
   }, {
@@ -168,7 +170,9 @@ var FeedDecoder = /*#__PURE__*/function () {
         _this2.played.add(begin - begin, end - begin);
         _this2.progress += end - begin;
         _this2.paused = true;
+        _this2.playing = false;
       };
+      cancelAnimationFrame(this.rAF);
       this.srcNode.stop();
     }
   }, {
@@ -198,6 +202,10 @@ var FeedDecoder = /*#__PURE__*/function () {
     key: "_seekBuffer",
     value: function _seekBuffer(seek) {
       if (!this.srcNode) return;
+      this.seeking = true;
+      // Seeking works by *PAUSING* buffer playback first, so that we get a
+      // progress update. The `seek` arg augments this.progress to find the
+      // correct time to begin playing back from.
       this._pauseBuffer();
       var bufferToSeek = this.srcNode.buffer;
       var newSrcNode = this.ctx.createBufferSource();
@@ -205,6 +213,27 @@ var FeedDecoder = /*#__PURE__*/function () {
       newSrcNode.connect(this.ctx.destination);
       this.srcNode = newSrcNode;
       this._startSrcNode(0, seek + this.progress);
+    }
+  }, {
+    key: "_startProgressTracker",
+    value: function _startProgressTracker() {
+      var _this3 = this;
+      var startTime = this.ctx.getOutputTimestamp().contextTime;
+      var rAF;
+      // Helper function to output timestamps 
+      var outputTimestamps = function outputTimestamps() {
+        try {
+          var ts = _this3.ctx.getOutputTimestamp();
+          _this3.e.emit('timeupdate', ts.contextTime - startTime);
+          // Keep going until we reach end of audio buffer
+          if (ts.contextTime - startTime < _this3.srcNode.buffer.duration && _this3.srcNode) {
+            _this3.rAF = requestAnimationFrame(outputTimestamps); // Reregister itself
+          }
+        } catch (err) {
+          console.error('progress tracking error:', err);
+        }
+      };
+      this.rAF = requestAnimationFrame(outputTimestamps);
     }
   }]);
   return FeedDecoder;
