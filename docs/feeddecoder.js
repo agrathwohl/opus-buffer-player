@@ -89,19 +89,21 @@ var FeedDecoder = /*#__PURE__*/function () {
   }, {
     key: "playMessage",
     value: function playMessage(url) {
+      var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
       var buf = this.messages[url];
       var srcNode = this.ctx.createBufferSource();
       srcNode.buffer = buf;
       srcNode.connect(this.ctx.destination);
-      srcNode.start();
+      srcNode.start(0, seek);
     }
   }, {
     key: "_playBuffer",
     value: function _playBuffer(ab) {
+      var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
       var srcNode = this.ctx.createBufferSource();
       srcNode.buffer = ab;
       srcNode.connect(this.ctx.destination);
-      srcNode.start();
+      srcNode.start(0, seek);
     }
   }]);
   return FeedDecoder;

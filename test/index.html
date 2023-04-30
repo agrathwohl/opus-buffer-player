@@ -2,7 +2,9 @@
 <head></head>
 <body>
 <label for="opusurl">URL to your opus:</label>
-<input type="url" id="opusurl" name="opusurl"> 
+<input type="url" id="opusurl" name="opusurl">
+<label for="startfrom">Start from (seconds)</label>
+<input type="number" id="startfrom" name="startfrom" value=0 placeholder=0 min=0>
 <button id="b" onclick="sendMessage()">clicky</button>
 <script type="text/javascript" src="feeddecoder.js"></script>
 <script>
@@ -23,7 +25,10 @@
             const buf = await decoder._onNewMessageChunks(chunks)
             console.log(buf)
 
-            decoder._playBuffer(buf)
+            const startValue = Number(document.getElementById('startfrom').value)
+            console.log(startValue)
+
+            decoder._playBuffer(buf, startValue)
         }
         worker.postMessage({url: document.getElementById('opusurl').value || 'https://pkg.storyboardtesting.com/audio/poppclip.opus'})
     }

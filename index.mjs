@@ -27,18 +27,18 @@ class FeedDecoder {
         console.log(bufs)
         return bufs.join()
     }
-    playMessage(url) {
+    playMessage(url, seek=0) {
         const buf = this.messages[url]
         const srcNode = this.ctx.createBufferSource()
         srcNode.buffer = buf
         srcNode.connect(this.ctx.destination)
-        srcNode.start()
+        srcNode.start(0, seek)
     }
-    _playBuffer(ab) {
+    _playBuffer(ab, seek=0) {
         const srcNode = this.ctx.createBufferSource()
         srcNode.buffer = ab
         srcNode.connect(this.ctx.destination)
-        srcNode.start()
+        srcNode.start(0, seek)
     }
 }
 
