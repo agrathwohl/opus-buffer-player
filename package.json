@@ -7,7 +7,7 @@
     "build": "browserify index.mjs -p esmify -s FeedDecoder -o feeddecoder.js",
     "build-worker": "browserify worker.mjs -p esmify -o decodeworker.js",
     "build-all": "npm run build && npm run build-worker",
-    "dist": "npm run build-all && cp feeddecoder.js dist && cp decodeworker.js dist",
+    "dist": "mkdir -p dist && npm run build-all && mv feeddecoder.js dist && mv decodeworker.js dist",
     "serve": "npx http-server ./test -c-1",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -20,6 +20,18 @@
     const FD = FeedDecoder.default
     const decoder = new FD()
     console.log(decoder)
+    decoder.e.on('play', () => {
+        console.log('decoder emitted PLAY event')
+    })
+    decoder.e.on('pause', () => {
+        console.log('decoder emitted PAUSE event')
+    })
+    decoder.e.on('stop', () => {
+        console.log('decoder emitted STOP event')
+    })
+    decoder.e.on('seeked', () => {
+        console.log('decoder emitted SEEKED event')
+    })
 
     function seekDuringPlay() {
         console.log('seeking to 15s during playback')
@@ -33,6 +45,7 @@
     function pauseDuringPlay() {
         console.log('pausing right now')
         decoder._pauseBuffer()
+        console.log(decoder.ctx._eventTimings)
     }
     function resumePlayback() {
         console.log('resuming from', decoder.progress)

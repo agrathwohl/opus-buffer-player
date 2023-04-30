@@ -45,6 +45,7 @@
     function pauseDuringPlay() {
         console.log('pausing right now')
         decoder._pauseBuffer()
+        console.log(decoder.ctx._eventTimings)
     }
     function resumePlayback() {
         console.log('resuming from', decoder.progress)
