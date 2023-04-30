@@ -97,13 +97,36 @@ var FeedDecoder = /*#__PURE__*/function () {
       srcNode.start(0, seek);
     }
   }, {
+    key: "_startSrcNode",
+    value: function _startSrcNode() {
+      var when = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
+      var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      if (!this.srcNode) return;
+      this.srcNode.start(when, seek);
+      // TODO begin progress clock
+    }
+  }, {
     key: "_playBuffer",
     value: function _playBuffer(ab) {
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
       var srcNode = this.ctx.createBufferSource();
       srcNode.buffer = ab;
       srcNode.connect(this.ctx.destination);
-      srcNode.start(0, seek);
+      this.srcNode = srcNode;
+      this._startSrcNode(0, seek);
+      // this.srcNode.start(0, seek)
+    }
+  }, {
+    key: "_seekBuffer",
+    value: function _seekBuffer(seek) {
+      if (!this.srcNode) return;
+      this.srcNode.stop();
+      var bufferToSeek = this.srcNode.buffer;
+      var newSrcNode = this.ctx.createBufferSource();
+      newSrcNode.buffer = bufferToSeek;
+      newSrcNode.connect(this.ctx.destination);
+      this.srcNode = newSrcNode;
+      this._startSrcNode(0, seek);
     }
   }]);
   return FeedDecoder;
