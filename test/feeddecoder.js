@@ -13,12 +13,18 @@ exports["default"] = void 0;
 var _audioBufferFrom = _interopRequireDefault(require("audio-buffer-from"));
 var _audioBufferList = _interopRequireDefault(require("audio-buffer-list"));
 var _decode = _interopRequireDefault(require("./lib/decode.mjs"));
+var _timerangesPlus = _interopRequireDefault(require("timeranges-plus"));
 require("@storyboard-fm/audio-core-library");
 function _interopRequireDefault(obj) {
   return obj && obj.__esModule ? obj : {
     "default": obj
   };
 }
+/**
+ * FeedDecoder is a class for managing a feed's incoming audio messages. It
+ * eagerly consumes and decodes opus audio files into AudioBuffer for immediate
+ * and easy playback via the Web Audio API.
+ */
 var FeedDecoder = /*#__PURE__*/function () {
   function FeedDecoder() {
     var feed = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
@@ -26,13 +32,22 @@ var FeedDecoder = /*#__PURE__*/function () {
     this.feed = feed;
     this.messages = {};
     this.ctx = new AudioContext();
-    this.ctx.toggle();
+    // this.ctx.toggle()
+    this.progress = 0;
+    this.played = new _timerangesPlus["default"]();
   }
-  /**
-   * When feed receives a new audio message, pass the URL to this function to
-   * produce decoded opus file chunks, from which we can generate AudioBuffers
-   */
   (0, _createClass2["default"])(FeedDecoder, [{
+    key: "_prepareCtx",
+    value: function _prepareCtx() {
+      if (this.ctx.verifyACL()) {
+        if (this.ctx.state !== 'running') this.ctx.toggle();
+      }
+    }
+    /**
+     * When feed receives a new audio message, pass the URL to this function to
+     * produce decoded opus file chunks, from which we can generate AudioBuffers
+     */
+  }, {
     key: "_onNewMessage",
     value: function () {
       var _onNewMessage2 = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee(url) {
@@ -73,9 +88,8 @@ var FeedDecoder = /*#__PURE__*/function () {
                   sampleRate: 48000
                 });
               }));
-              console.log(bufs);
               return _context2.abrupt("return", bufs.join());
-            case 4:
+            case 3:
             case "end":
               return _context2.stop();
           }
@@ -90,11 +104,14 @@ var FeedDecoder = /*#__PURE__*/function () {
     key: "playMessage",
     value: function playMessage(url) {
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      this._prepareCtx();
       var buf = this.messages[url];
       var srcNode = this.ctx.createBufferSource();
       srcNode.buffer = buf;
       srcNode.connect(this.ctx.destination);
-      srcNode.start(0, seek);
+      this.srcNode = srcNode;
+      this._startSrcNode(0, seek);
+      // srcNode.start(0, seek)
     }
   }, {
     key: "_startSrcNode",
@@ -102,8 +119,44 @@ var FeedDecoder = /*#__PURE__*/function () {
       var when = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
       if (!this.srcNode) return;
+      this._prepareCtx();
       this.srcNode.start(when, seek);
-      // TODO begin progress clock
+      this.progress = seek;
+      if (this.paused) this.paused = false;
+      this.ctx.newEvent('streamplayer-play');
+    }
+  }, {
+    key: "_stopBuffer",
+    value: function _stopBuffer() {
+      var _this = this;
+      if (!this.srcNode) return;
+      this.srcNode.onended = function () {
+        _this.ctx.endEvent('streamplayer-play');
+        _this.srcNode = null;
+        var _this$ctx$_eventTimin = _this.ctx._eventTimings['streamplayer-play'],
+          begin = _this$ctx$_eventTimin.begin,
+          end = _this$ctx$_eventTimin.end;
+        _this.played.add(begin - begin, end - begin);
+        _this.progress = 0;
+      };
+      this.srcNode.stop();
+    }
+  }, {
+    key: "_pauseBuffer",
+    value: function _pauseBuffer() {
+      var _this2 = this;
+      if (!this.srcNode) return;
+      this.srcNode.onended = function () {
+        _this2.ctx.endEvent('streamplayer-play');
+        var _this2$ctx$_eventTimi = _this2.ctx._eventTimings['streamplayer-play'],
+          begin = _this2$ctx$_eventTimi.begin,
+          end = _this2$ctx$_eventTimi.end;
+        _this2.played.add(begin - begin, end - begin);
+        _this2.progress += end - begin;
+        _this2.paused = true;
+        console.log('paused playhead at', _this2.progress);
+      };
+      this.srcNode.stop();
     }
   }, {
     key: "_playBuffer",
@@ -114,7 +167,18 @@ var FeedDecoder = /*#__PURE__*/function () {
       srcNode.connect(this.ctx.destination);
       this.srcNode = srcNode;
       this._startSrcNode(0, seek);
-      // this.srcNode.start(0, seek)
+    }
+  }, {
+    key: "_resumeBuffer",
+    value: function _resumeBuffer() {
+      if (!this.srcNode) return;
+      if (!this.paused) return console.error('Not paused so cant resume');
+      var bufferToSeek = this.srcNode.buffer;
+      var newSrcNode = this.ctx.createBufferSource();
+      newSrcNode.buffer = bufferToSeek;
+      newSrcNode.connect(this.ctx.destination);
+      this.srcNode = newSrcNode;
+      this._startSrcNode(0, this.progress);
     }
   }, {
     key: "_seekBuffer",
@@ -134,7 +198,7 @@ var FeedDecoder = /*#__PURE__*/function () {
 var _default = FeedDecoder;
 exports["default"] = _default;
 
-},{"./lib/decode.mjs":2,"@babel/runtime/helpers/asyncToGenerator":5,"@babel/runtime/helpers/classCallCheck":7,"@babel/runtime/helpers/createClass":8,"@babel/runtime/helpers/interopRequireDefault":10,"@babel/runtime/regenerator":16,"@storyboard-fm/audio-core-library":18,"audio-buffer-from":28,"audio-buffer-list":29}],2:[function(require,module,exports){
+},{"./lib/decode.mjs":2,"@babel/runtime/helpers/asyncToGenerator":5,"@babel/runtime/helpers/classCallCheck":7,"@babel/runtime/helpers/createClass":8,"@babel/runtime/helpers/interopRequireDefault":10,"@babel/runtime/regenerator":16,"@storyboard-fm/audio-core-library":18,"audio-buffer-from":28,"audio-buffer-list":29,"timeranges-plus":90}],2:[function(require,module,exports){
 "use strict";
 
 var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault");
@@ -11338,5 +11402,7 @@ function decode(uri) {
 	return abuf
 }
 
-},{"atob-lite":27,"is-base64":69}]},{},[1])(1)
+},{"atob-lite":27,"is-base64":69}],90:[function(require,module,exports){
+function compareTime(r,n){return r[0]-n[0]}function mergeRanges(r,n,e){return r.concat(e?Trp.mergeRange(r.pop(),n):[n])}function toRangeNum(r,n){return parseInt(r,36)/(n||1e3)}function passThrough(r){return r}function Trp(r,n){void 0!==r&&void 0!==n&&u(r,n);var e=this,t=void 0!==r&&void 0!==n,o=t?[[r,n]]:[];function u(r,n){if(void 0===r||void 0===n||Number.isNaN(r)||Number.isNaN(n))throw Error("Input parameters should be numbers.");if(n<r)throw Error("Start should be less than end.")}function a(r){if(r>=e.length)throw Error("Index is out of bounds.")}function i(r){var n=o.concat(Trp.toRangeArray(r));o=Trp.cleanUpRange(n),e.length=o.length}e.length=Number(t),e.add=function(r,n){u(r,n),o.push([r,n]),o=Trp.cleanUpRange(o),e.length=o.length},e.start=function(r){return a(r),o[r][0]},e.end=function(r){return a(r),o[r][1]},e.merge=function(r){(Array.isArray(r)?r:[r]).forEach(i)},e.toString=function(){return(o.length?"[[{0}]]":"[{0}]").replace("{0}",o.join("],["))},e.toDuration=function(){return[].concat.apply([],o).reduce(function(r,n,e){return r+n*(e%2?1:-1)},0)},e.pack=function(n,r){return(r||passThrough)([].concat.apply([],o).map(function(r){return Math.round(r*(n||1e3)).toString(36)}).join(":"))}}Trp.unpack=function(r,e,n){var t=new Trp;return(n||passThrough)(r).split(":").reduce(function(r,n){return null===r?n:(t.add(toRangeNum(r,e),toRangeNum(n,e)),null)},null),t},Trp.mergeRange=function(r,n){if(r[0]<=n[0]&&n[0]<=r[1])return[[r[0],r[1]<=n[1]?n[1]:r[1]]];if(r[1]<n[0])return[r,n];throw Error("Parameters need to be sorted via start date before passing.")},Trp.toRangeArray=function(e){return new Array(e.length).fill().map(function(r,n){return[e.start(n),e.end(n)]})},Trp.cleanUpRange=function(r){return r.sort(compareTime).reduce(mergeRanges,[])},Trp.wrap=function(r){var n=new Trp;return Trp.toRangeArray(r).forEach(function(r){n.add(r[0],r[1])}),n},module.exports=Trp;
+},{}]},{},[1])(1)
 });

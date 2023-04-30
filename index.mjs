@@ -1,14 +1,27 @@
 import abf from 'audio-buffer-from'
 import AudioBufferList from 'audio-buffer-list'
 import onMessage from './lib/decode.mjs'
+import Trp from 'timeranges-plus'
 import '@storyboard-fm/audio-core-library'
 
+/**
+ * FeedDecoder is a class for managing a feed's incoming audio messages. It
+ * eagerly consumes and decodes opus audio files into AudioBuffer for immediate
+ * and easy playback via the Web Audio API.
+ */
 class FeedDecoder {
     constructor(feed='') {
         this.feed = feed
         this.messages = {}
         this.ctx = new AudioContext()
-        this.ctx.toggle()
+        // this.ctx.toggle()
+        this.progress = 0
+        this.played = new Trp()
+    }
+    _prepareCtx() {
+        if (this.ctx.verifyACL()) {
+            if (this.ctx.state !== 'running') this.ctx.toggle()
+        }
     }
     /**
      * When feed receives a new audio message, pass the URL to this function to
@@ -24,20 +37,48 @@ class FeedDecoder {
         const bufs = new AudioBufferList(
             chunks.map(c => abf(c.channelData[0], { sampleRate: 48000 }))
         )
-        console.log(bufs)
         return bufs.join()
     }
     playMessage(url, seek=0) {
+        this._prepareCtx()
         const buf = this.messages[url]
         const srcNode = this.ctx.createBufferSource()
         srcNode.buffer = buf
         srcNode.connect(this.ctx.destination)
-        srcNode.start(0, seek)
+        this.srcNode = srcNode
+        this._startSrcNode(0, seek)
+        // srcNode.start(0, seek)
     }
     _startSrcNode(when=0, seek=0) {
         if (!this.srcNode) return
+        this._prepareCtx()
         this.srcNode.start(when, seek)
-        // TODO begin progress clock
+        this.progress = seek
+        if (this.paused) this.paused = false
+        this.ctx.newEvent('streamplayer-play')
+    }
+    _stopBuffer() {
+        if (!this.srcNode) return
+        this.srcNode.onended = () => {
+            this.ctx.endEvent('streamplayer-play')
+            this.srcNode = null
+            const { begin, end } = this.ctx._eventTimings['streamplayer-play']
+            this.played.add(begin - begin, end - begin)
+            this.progress = 0
+        }
+        this.srcNode.stop()
+    }
+    _pauseBuffer() {
+        if (!this.srcNode) return
+        this.srcNode.onended = () => {
+            this.ctx.endEvent('streamplayer-play')
+            const { begin, end } = this.ctx._eventTimings['streamplayer-play']
+            this.played.add(begin - begin, end - begin)
+            this.progress += (end - begin)
+            this.paused = true
+            console.log('paused playhead at', this.progress)
+        }
+        this.srcNode.stop()
     }
     _playBuffer(ab, seek=0) {
         const srcNode = this.ctx.createBufferSource()
@@ -45,7 +86,16 @@ class FeedDecoder {
         srcNode.connect(this.ctx.destination)
         this.srcNode = srcNode
         this._startSrcNode(0, seek)
-        // this.srcNode.start(0, seek)
+    }
+    _resumeBuffer() {
+        if (!this.srcNode) return
+        if (!this.paused) return console.error('Not paused so cant resume')
+        const bufferToSeek = this.srcNode.buffer
+        const newSrcNode = this.ctx.createBufferSource()
+        newSrcNode.buffer = bufferToSeek
+        newSrcNode.connect(this.ctx.destination)
+        this.srcNode = newSrcNode
+        this._startSrcNode(0, this.progress)
     }
     _seekBuffer(seek) {
         if (!this.srcNode) return

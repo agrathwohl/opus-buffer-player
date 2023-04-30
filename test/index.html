@@ -6,6 +6,10 @@
 <label for="startfrom">Start from (seconds)</label>
 <input type="number" id="startfrom" name="startfrom" value=0 placeholder=0 min=0>
 <button id="b" onclick="sendMessage()">clicky</button>
+<button id="b2" onclick="stopPlayback()">stoppy</button>
+<button id="b3" onclick="seekDuringPlay()">seeky</button>
+<button id="b4" onclick="pauseDuringPlay()">pausy</button>
+<button id="b5" onclick="resumePlayback()">resumy</button>
 <script type="text/javascript" src="feeddecoder.js"></script>
 <script>
     console.log('sup')
@@ -13,14 +17,32 @@
     const worker = new Worker('decodeworker.js')
     console.log(worker)
 
+    const FD = FeedDecoder.default
+    const decoder = new FD()
+    console.log(decoder)
+
+    function seekDuringPlay() {
+        console.log('seeking to 15s during playback')
+        decoder._seekBuffer(15)
+    }
+    function stopPlayback() {
+        console.log('stopping playback of buffer')
+        decoder._stopBuffer()
+        console.log(decoder.ctx._eventTimings)
+    }
+    function pauseDuringPlay() {
+        console.log('pausing right now')
+        decoder._pauseBuffer()
+    }
+    function resumePlayback() {
+        console.log('resuming from', decoder.progress)
+        decoder._resumeBuffer()
+    }
 
     function sendMessage() {
         worker.onmessage = async function (chunksMessage) {
             console.log('worker sent us chunks', chunksMessage)
             const chunks = chunksMessage.data
-            const FD = FeedDecoder.default
-            const decoder = new FD()
-            console.log(decoder)
 
             const buf = await decoder._onNewMessageChunks(chunks)
             console.log(buf)
