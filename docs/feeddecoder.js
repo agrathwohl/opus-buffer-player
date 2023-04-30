@@ -117,6 +117,11 @@ var FeedDecoder = /*#__PURE__*/function () {
       this.srcNode = srcNode;
       this._startSrcNode(0, seek);
     }
+    /**
+     * Creates the AudioBufferSourceNode and connects it to the destination node.
+     * Whenever this class needs to start playback of audio (play/resume/etc.)
+     * it should eventually call this method to ensure underlying logic.
+     */
   }, {
     key: "_startSrcNode",
     value: function _startSrcNode() {
@@ -128,22 +133,26 @@ var FeedDecoder = /*#__PURE__*/function () {
       var oldProgress = this.progress;
       this.srcNode.start(when, seek);
       this.progress = seek;
-      if (this.paused) this.paused = false;
       this.ctx.newEvent('streamplayer-play');
       if (oldProgress !== this.progress) this.e.emit('seeked');
       this._startProgressTracker();
       this.e.emit('play');
       this.playing = true;
+      this.seeking = false;
+      this.paused = false;
     }
+    /**
+     * Stop playing the AudioBuffer. While _pauseBuffer() does not reset
+     * this.progress, this method does.
+     */
   }, {
     key: "_stopBuffer",
     value: function _stopBuffer() {
       var _this = this;
-      // TODO: 'stop' event
       if (!this.srcNode) return;
+      cancelAnimationFrame(this.rAF);
       this.srcNode.onended = function () {
         _this.ctx.endEvent('streamplayer-play');
-        _this.srcNode = null;
         var _this$ctx$_eventTimin = _this.ctx._eventTimings['streamplayer-play'],
           begin = _this$ctx$_eventTimin.begin,
           end = _this$ctx$_eventTimin.end;
@@ -151,24 +160,25 @@ var FeedDecoder = /*#__PURE__*/function () {
         _this.progress = 0;
         _this.e.emit('stop');
         _this.playing = false;
+        _this.seeking = false;
+        _this.paused = false;
+        _this.srcNode = null;
       };
-      cancelAnimationFrame(this.rAF);
       this.srcNode.stop();
     }
   }, {
     key: "_pauseBuffer",
     value: function _pauseBuffer() {
       var _this2 = this;
-      // TODO: 'pause' event
       if (!this.srcNode) return;
       this.srcNode.onended = function () {
-        _this2.e.emit('pause');
+        _this2.e.emit('pause', _this2.playhead);
         _this2.ctx.endEvent('streamplayer-play');
         var _this2$ctx$_eventTimi = _this2.ctx._eventTimings['streamplayer-play'],
           begin = _this2$ctx$_eventTimi.begin,
           end = _this2$ctx$_eventTimi.end;
         _this2.played.add(begin - begin, end - begin);
-        _this2.progress += end - begin;
+        _this2.progress = _this2.playhead;
         _this2.paused = true;
         _this2.playing = false;
       };
@@ -179,7 +189,6 @@ var FeedDecoder = /*#__PURE__*/function () {
     key: "_playBuffer",
     value: function _playBuffer(ab) {
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
-      // TODO: 'waiting' event
       var srcNode = this.ctx.createBufferSource();
       srcNode.buffer = ab;
       srcNode.connect(this.ctx.destination);
@@ -196,7 +205,7 @@ var FeedDecoder = /*#__PURE__*/function () {
       newSrcNode.buffer = bufferToSeek;
       newSrcNode.connect(this.ctx.destination);
       this.srcNode = newSrcNode;
-      this._startSrcNode(0, this.progress);
+      this._startSrcNode(0, this.playhead);
     }
   }, {
     key: "_seekBuffer",
@@ -212,25 +221,30 @@ var FeedDecoder = /*#__PURE__*/function () {
       newSrcNode.buffer = bufferToSeek;
       newSrcNode.connect(this.ctx.destination);
       this.srcNode = newSrcNode;
-      this._startSrcNode(0, seek + this.progress);
+      this._startSrcNode(0, seek + this.playhead);
     }
   }, {
     key: "_startProgressTracker",
     value: function _startProgressTracker() {
       var _this3 = this;
       var startTime = this.ctx.getOutputTimestamp().contextTime;
-      var rAF;
+      var progressSnapshot = this.progress;
+      var elapsed;
       // Helper function to output timestamps 
       var outputTimestamps = function outputTimestamps() {
         try {
           var ts = _this3.ctx.getOutputTimestamp();
-          _this3.e.emit('timeupdate', ts.contextTime - startTime);
+          elapsed = ts.contextTime - startTime;
+          _this3.playhead = progressSnapshot + elapsed;
+          _this3.e.emit('timeupdate', _this3.playhead);
           // Keep going until we reach end of audio buffer
-          if (ts.contextTime - startTime < _this3.srcNode.buffer.duration && _this3.srcNode) {
+          if (!_this3.paused && !_this3.seeking && ts.contextTime - startTime < _this3.srcNode.buffer.duration) {
             _this3.rAF = requestAnimationFrame(outputTimestamps); // Reregister itself
+          } else {
+            cancelAnimationFrame(_this3.rAF);
           }
         } catch (err) {
-          console.error('progress tracking error:', err);
+          return err;
         }
       };
       this.rAF = requestAnimationFrame(outputTimestamps);

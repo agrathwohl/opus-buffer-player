@@ -52,6 +52,11 @@ class FeedDecoder {
         this.srcNode = srcNode
         this._startSrcNode(0, seek)
     }
+    /**
+     * Creates the AudioBufferSourceNode and connects it to the destination node.
+     * Whenever this class needs to start playback of audio (play/resume/etc.)
+     * it should eventually call this method to ensure underlying logic.
+     */
     _startSrcNode(when=0, seek=0) {
         // TODO: 'play' event
         if (!this.srcNode) return
@@ -59,37 +64,42 @@ class FeedDecoder {
         const oldProgress = this.progress
         this.srcNode.start(when, seek)
         this.progress = seek
-        if (this.paused) this.paused = false
         this.ctx.newEvent('streamplayer-play')
         if (oldProgress !== this.progress) this.e.emit('seeked')
         this._startProgressTracker()
         this.e.emit('play')
         this.playing = true
+        this.seeking = false
+        this.paused = false
     }
+    /**
+     * Stop playing the AudioBuffer. While _pauseBuffer() does not reset
+     * this.progress, this method does.
+     */
     _stopBuffer() {
-        // TODO: 'stop' event
         if (!this.srcNode) return
+        cancelAnimationFrame(this.rAF)
         this.srcNode.onended = () => {
             this.ctx.endEvent('streamplayer-play')
-            this.srcNode = null
             const { begin, end } = this.ctx._eventTimings['streamplayer-play']
             this.played.add(begin - begin, end - begin)
             this.progress = 0
             this.e.emit('stop')
             this.playing = false
+            this.seeking = false
+            this.paused = false
+            this.srcNode = null
         }
-        cancelAnimationFrame(this.rAF)
         this.srcNode.stop()
     }
     _pauseBuffer() {
-        // TODO: 'pause' event
         if (!this.srcNode) return
         this.srcNode.onended = () => {
-            this.e.emit('pause')
+            this.e.emit('pause', this.playhead)
             this.ctx.endEvent('streamplayer-play')
             const { begin, end } = this.ctx._eventTimings['streamplayer-play']
             this.played.add(begin - begin, end - begin)
-            this.progress += (end - begin)
+            this.progress = this.playhead
             this.paused = true
             this.playing = false
         }
@@ -97,7 +107,6 @@ class FeedDecoder {
         this.srcNode.stop()
     }
     _playBuffer(ab, seek=0) {
-        // TODO: 'waiting' event
         const srcNode = this.ctx.createBufferSource()
         srcNode.buffer = ab
         srcNode.connect(this.ctx.destination)
@@ -112,7 +121,7 @@ class FeedDecoder {
         newSrcNode.buffer = bufferToSeek
         newSrcNode.connect(this.ctx.destination)
         this.srcNode = newSrcNode
-        this._startSrcNode(0, this.progress)
+        this._startSrcNode(0, this.playhead)
     }
     _seekBuffer(seek) {
         if (!this.srcNode) return
@@ -126,22 +135,29 @@ class FeedDecoder {
         newSrcNode.buffer = bufferToSeek
         newSrcNode.connect(this.ctx.destination)
         this.srcNode = newSrcNode
-        this._startSrcNode(0, seek + this.progress)
+        this._startSrcNode(0, seek + this.playhead)
     }
     _startProgressTracker() {
         const startTime = this.ctx.getOutputTimestamp().contextTime
-        let rAF
+        const progressSnapshot = this.progress
+        let elapsed
         // Helper function to output timestamps 
         const outputTimestamps = () => {
           try {
               const ts = this.ctx.getOutputTimestamp()
-              this.e.emit('timeupdate', ts.contextTime - startTime)
+              elapsed = ts.contextTime - startTime
+              this.playhead = progressSnapshot + elapsed
+              this.e.emit('timeupdate', this.playhead)
               // Keep going until we reach end of audio buffer
-              if (ts.contextTime - startTime < this.srcNode.buffer.duration && this.srcNode) {
+              if (!this.paused &&
+                  !this.seeking &&
+                  ts.contextTime - startTime < this.srcNode.buffer.duration) {
                 this.rAF = requestAnimationFrame(outputTimestamps); // Reregister itself
+              } else {
+                  cancelAnimationFrame(this.rAF)
               }
           } catch (err) {
-              console.error('progress tracking error:', err)
+              return err
           }
         }
         this.rAF = requestAnimationFrame(outputTimestamps)

@@ -34,21 +34,17 @@
     decoder.e.on('seeked', () => {
         console.log('decoder emitted SEEKED event')
     })
-    // decoder.e.on('timeupdate', (time) => document.getElementById('playhead').innerHTML = `${time}`)
+    decoder.e.on('timeupdate', (time) => document.getElementById('playhead').innerHTML = `${time}`)
 
     function seekDuringPlay() {
         console.log('seeking to 15s during playback')
         decoder._seekBuffer(15)
     }
     function stopPlayback() {
-        console.log('stopping playback of buffer')
         decoder._stopBuffer()
-        console.log(decoder.ctx._eventTimings)
     }
     function pauseDuringPlay() {
-        console.log('pausing right now')
         decoder._pauseBuffer()
-        console.log(decoder.ctx._eventTimings)
     }
     function resumePlayback() {
         console.log('resuming from', decoder.progress)
