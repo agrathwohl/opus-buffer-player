@@ -38,12 +38,12 @@ npm run serve
 
 ### Events
 #### `MediaElement`
-- [ ] `play`
-- [ ] `pause`
-- [ ] `stop`
+- [x] `play`
+- [x] `pause`
+- [x] `stop`
 - [ ] `canplay`/`canplaythrough`
 - [ ] `waiting`
-- [ ] `seeked`
+- [x] `seeked`
 #### `CustomEvent`
-- [ ] `new-message`
-- [ ] `message-ready`
+- [x] `new-message`
+- [x] `message-ready`
