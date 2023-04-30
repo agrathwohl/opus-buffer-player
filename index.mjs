@@ -2,6 +2,7 @@ import abf from 'audio-buffer-from'
 import AudioBufferList from 'audio-buffer-list'
 import onMessage from './lib/decode.mjs'
 import Trp from 'timeranges-plus'
+import EventEmitter from 'eventemitter3'
 import '@storyboard-fm/audio-core-library'
 
 /**
@@ -16,6 +17,7 @@ class FeedDecoder {
         this.ctx = ctx || new AudioContext()
         this.progress = 0
         this.played = new Trp()
+        this.e = new EventEmitter()
     }
     _prepareCtx() {
         if (this.ctx.verifyACL()) {
@@ -29,6 +31,7 @@ class FeedDecoder {
     async _onNewMessage(url) {
         const opusChunks = await onMessage(url)
         this.messages[url] = await this._onNewMessageChunks(opusChunks)
+        this.e.emit('new-message')
         // TODO dispatch 'new-message' event
     }
     async _onNewMessageChunks(chunks) {
@@ -36,6 +39,7 @@ class FeedDecoder {
         const bufs = new AudioBufferList(
             chunks.map(c => abf(c.channelData[0], { sampleRate: 48000 }))
         )
+        this.e.emit('message-ready')
         return bufs.join()
         // TODO dispatch 'message-ready' event
     }
@@ -52,10 +56,15 @@ class FeedDecoder {
         // TODO: 'play' event
         if (!this.srcNode) return
         this._prepareCtx()
+        const oldProgress = this.progress
+        console.log(oldProgress,'old progress')
         this.srcNode.start(when, seek)
         this.progress = seek
+        console.log(this.progress, 'new progress')
         if (this.paused) this.paused = false
         this.ctx.newEvent('streamplayer-play')
+        if (oldProgress !== this.progress) this.e.emit('seeked')
+        this.e.emit('play')
     }
     _stopBuffer() {
         // TODO: 'stop' event
@@ -66,6 +75,7 @@ class FeedDecoder {
             const { begin, end } = this.ctx._eventTimings['streamplayer-play']
             this.played.add(begin - begin, end - begin)
             this.progress = 0
+            this.e.emit('stop')
         }
         this.srcNode.stop()
     }
@@ -73,6 +83,7 @@ class FeedDecoder {
         // TODO: 'pause' event
         if (!this.srcNode) return
         this.srcNode.onended = () => {
+            this.e.emit('pause')
             this.ctx.endEvent('streamplayer-play')
             const { begin, end } = this.ctx._eventTimings['streamplayer-play']
             this.played.add(begin - begin, end - begin)

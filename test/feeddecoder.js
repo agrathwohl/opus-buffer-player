@@ -14,6 +14,7 @@ var _audioBufferFrom = _interopRequireDefault(require("audio-buffer-from"));
 var _audioBufferList = _interopRequireDefault(require("audio-buffer-list"));
 var _decode = _interopRequireDefault(require("./lib/decode.mjs"));
 var _timerangesPlus = _interopRequireDefault(require("timeranges-plus"));
+var _eventemitter = _interopRequireDefault(require("eventemitter3"));
 require("@storyboard-fm/audio-core-library");
 function _interopRequireDefault(obj) {
   return obj && obj.__esModule ? obj : {
@@ -28,13 +29,14 @@ function _interopRequireDefault(obj) {
 var FeedDecoder = /*#__PURE__*/function () {
   function FeedDecoder() {
     var feed = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+    var ctx = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
     (0, _classCallCheck2["default"])(this, FeedDecoder);
     this.feed = feed;
     this.messages = {};
-    this.ctx = new AudioContext();
-    // this.ctx.toggle()
+    this.ctx = ctx || new AudioContext();
     this.progress = 0;
     this.played = new _timerangesPlus["default"]();
+    this.e = new _eventemitter["default"]();
   }
   (0, _createClass2["default"])(FeedDecoder, [{
     key: "_prepareCtx",
@@ -63,7 +65,9 @@ var FeedDecoder = /*#__PURE__*/function () {
               return this._onNewMessageChunks(opusChunks);
             case 5:
               this.messages[url] = _context.sent;
-            case 6:
+              this.e.emit('new-message');
+              // TODO dispatch 'new-message' event
+            case 7:
             case "end":
               return _context.stop();
           }
@@ -88,12 +92,13 @@ var FeedDecoder = /*#__PURE__*/function () {
                   sampleRate: 48000
                 });
               }));
+              this.e.emit('message-ready');
               return _context2.abrupt("return", bufs.join());
-            case 3:
+            case 4:
             case "end":
               return _context2.stop();
           }
-        }, _callee2);
+        }, _callee2, this);
       }));
       function _onNewMessageChunks(_x2) {
         return _onNewMessageChunks2.apply(this, arguments);
@@ -111,24 +116,30 @@ var FeedDecoder = /*#__PURE__*/function () {
       srcNode.connect(this.ctx.destination);
       this.srcNode = srcNode;
       this._startSrcNode(0, seek);
-      // srcNode.start(0, seek)
     }
   }, {
     key: "_startSrcNode",
     value: function _startSrcNode() {
       var when = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      // TODO: 'play' event
       if (!this.srcNode) return;
       this._prepareCtx();
+      var oldProgress = this.progress;
+      console.log(oldProgress, 'old progress');
       this.srcNode.start(when, seek);
       this.progress = seek;
+      console.log(this.progress, 'new progress');
       if (this.paused) this.paused = false;
       this.ctx.newEvent('streamplayer-play');
+      if (oldProgress !== this.progress) this.e.emit('seeked');
+      this.e.emit('play');
     }
   }, {
     key: "_stopBuffer",
     value: function _stopBuffer() {
       var _this = this;
+      // TODO: 'stop' event
       if (!this.srcNode) return;
       this.srcNode.onended = function () {
         _this.ctx.endEvent('streamplayer-play');
@@ -138,6 +149,7 @@ var FeedDecoder = /*#__PURE__*/function () {
           end = _this$ctx$_eventTimin.end;
         _this.played.add(begin - begin, end - begin);
         _this.progress = 0;
+        _this.e.emit('stop');
       };
       this.srcNode.stop();
     }
@@ -145,8 +157,10 @@ var FeedDecoder = /*#__PURE__*/function () {
     key: "_pauseBuffer",
     value: function _pauseBuffer() {
       var _this2 = this;
+      // TODO: 'pause' event
       if (!this.srcNode) return;
       this.srcNode.onended = function () {
+        _this2.e.emit('pause');
         _this2.ctx.endEvent('streamplayer-play');
         var _this2$ctx$_eventTimi = _this2.ctx._eventTimings['streamplayer-play'],
           begin = _this2$ctx$_eventTimi.begin,
@@ -154,7 +168,6 @@ var FeedDecoder = /*#__PURE__*/function () {
         _this2.played.add(begin - begin, end - begin);
         _this2.progress += end - begin;
         _this2.paused = true;
-        console.log('paused playhead at', _this2.progress);
       };
       this.srcNode.stop();
     }
@@ -162,6 +175,7 @@ var FeedDecoder = /*#__PURE__*/function () {
     key: "_playBuffer",
     value: function _playBuffer(ab) {
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      // TODO: 'waiting' event
       var srcNode = this.ctx.createBufferSource();
       srcNode.buffer = ab;
       srcNode.connect(this.ctx.destination);
@@ -185,7 +199,6 @@ var FeedDecoder = /*#__PURE__*/function () {
     value: function _seekBuffer(seek) {
       if (!this.srcNode) return;
       this._pauseBuffer();
-      // this.srcNode.stop()
       var bufferToSeek = this.srcNode.buffer;
       var newSrcNode = this.ctx.createBufferSource();
       newSrcNode.buffer = bufferToSeek;
@@ -199,7 +212,7 @@ var FeedDecoder = /*#__PURE__*/function () {
 var _default = FeedDecoder;
 exports["default"] = _default;
 
-},{"./lib/decode.mjs":2,"@babel/runtime/helpers/asyncToGenerator":5,"@babel/runtime/helpers/classCallCheck":7,"@babel/runtime/helpers/createClass":8,"@babel/runtime/helpers/interopRequireDefault":10,"@babel/runtime/regenerator":16,"@storyboard-fm/audio-core-library":18,"audio-buffer-from":28,"audio-buffer-list":29,"timeranges-plus":90}],2:[function(require,module,exports){
+},{"./lib/decode.mjs":2,"@babel/runtime/helpers/asyncToGenerator":5,"@babel/runtime/helpers/classCallCheck":7,"@babel/runtime/helpers/createClass":8,"@babel/runtime/helpers/interopRequireDefault":10,"@babel/runtime/regenerator":16,"@storyboard-fm/audio-core-library":18,"audio-buffer-from":28,"audio-buffer-list":29,"eventemitter3":67,"timeranges-plus":91}],2:[function(require,module,exports){
 "use strict";
 
 var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault");
@@ -361,7 +374,7 @@ function readChunks(reader) {
 var _default = onMessage;
 exports["default"] = _default;
 
-},{"@babel/runtime/helpers/asyncToGenerator":5,"@babel/runtime/helpers/awaitAsyncGenerator":6,"@babel/runtime/helpers/defineProperty":9,"@babel/runtime/helpers/interopRequireDefault":10,"@babel/runtime/helpers/wrapAsyncGenerator":15,"@babel/runtime/regenerator":16,"ogg-opus-decoder":76}],3:[function(require,module,exports){
+},{"@babel/runtime/helpers/asyncToGenerator":5,"@babel/runtime/helpers/awaitAsyncGenerator":6,"@babel/runtime/helpers/defineProperty":9,"@babel/runtime/helpers/interopRequireDefault":10,"@babel/runtime/helpers/wrapAsyncGenerator":15,"@babel/runtime/regenerator":16,"ogg-opus-decoder":77}],3:[function(require,module,exports){
 var OverloadYield = require("./OverloadYield.js");
 function AsyncGenerator(gen) {
   var front, back;
@@ -1276,7 +1289,7 @@ class WASMAudioDecoderWorker extends getWorker() {
 exports.default = WASMAudioDecoderWorker;
 
 }).call(this)}).call(this,require('_process'),require("buffer").Buffer)
-},{"./WASMAudioDecoderCommon.js":20,"@eshaz/web-worker":17,"_process":87,"buffer":36}],22:[function(require,module,exports){
+},{"./WASMAudioDecoderCommon.js":20,"@eshaz/web-worker":17,"_process":88,"buffer":36}],22:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1800,7 +1813,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"object-assign":75,"util/":26}],24:[function(require,module,exports){
+},{"object-assign":76,"util/":26}],24:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -2422,7 +2435,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this)}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":25,"_process":87,"inherits":24}],27:[function(require,module,exports){
+},{"./support/isBuffer":25,"_process":88,"inherits":24}],27:[function(require,module,exports){
 module.exports = function _atob(str) {
   return atob(str)
 }
@@ -2578,7 +2591,7 @@ function getFormat (arg) {
 	return typeof arg === 'string' ? format.parse(arg) : format.detect(arg)
 }
 
-},{"audio-buffer":31,"audio-context":32,"audio-format":33,"is-audio-buffer":68,"is-plain-obj":72,"pcm-convert":84,"pick-by-alias":86,"string-to-arraybuffer":89}],29:[function(require,module,exports){
+},{"audio-buffer":31,"audio-context":32,"audio-format":33,"is-audio-buffer":69,"is-plain-obj":73,"pcm-convert":85,"pick-by-alias":87,"string-to-arraybuffer":90}],29:[function(require,module,exports){
 /**
  * AudioBufferList class
  *
@@ -3068,7 +3081,7 @@ AudioBufferList.prototype.join = function join (from, to) {
   return buf
 }
 
-},{"audio-buffer":31,"audio-buffer-utils":30,"is-audio-buffer":68,"is-plain-obj":72,"negative-index":73,"object-assign":75}],30:[function(require,module,exports){
+},{"audio-buffer":31,"audio-buffer-utils":30,"is-audio-buffer":69,"is-plain-obj":73,"negative-index":74,"object-assign":76}],30:[function(require,module,exports){
 /**
  * @module  audio-buffer-utils
  */
@@ -3770,7 +3783,7 @@ function data (buffer, data) {
 	return data;
 }
 
-},{"audio-buffer":31,"audio-buffer-from":28,"audio-context":32,"clamp":37,"is-audio-buffer":68,"is-browser":70,"is-buffer":71}],31:[function(require,module,exports){
+},{"audio-buffer":31,"audio-buffer-from":28,"audio-context":32,"clamp":37,"is-audio-buffer":69,"is-browser":71,"is-buffer":72}],31:[function(require,module,exports){
 /**
  * AudioBuffer class
  *
@@ -4108,7 +4121,7 @@ function getType (arg) {
 	if (arg instanceof Uint32Array) return 'uint32'
 }
 
-},{"is-audio-buffer":68,"is-buffer":34,"is-plain-obj":72,"os":83,"pick-by-alias":86,"sample-rate":88}],34:[function(require,module,exports){
+},{"is-audio-buffer":69,"is-buffer":34,"is-plain-obj":73,"os":84,"pick-by-alias":87,"sample-rate":89}],34:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -6064,7 +6077,7 @@ function numberIsNaN (obj) {
 }
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"base64-js":35,"buffer":36,"ieee754":67}],37:[function(require,module,exports){
+},{"base64-js":35,"buffer":36,"ieee754":68}],37:[function(require,module,exports){
 module.exports = clamp
 
 function clamp(value, min, max) {
@@ -9782,6 +9795,344 @@ class BitReader {
 exports.BitReader = BitReader;
 
 },{"./constants.js":59}],67:[function(require,module,exports){
+'use strict';
+
+var has = Object.prototype.hasOwnProperty
+  , prefix = '~';
+
+/**
+ * Constructor to create a storage for our `EE` objects.
+ * An `Events` instance is a plain object whose properties are event names.
+ *
+ * @constructor
+ * @private
+ */
+function Events() {}
+
+//
+// We try to not inherit from `Object.prototype`. In some engines creating an
+// instance in this way is faster than calling `Object.create(null)` directly.
+// If `Object.create(null)` is not supported we prefix the event names with a
+// character to make sure that the built-in object properties are not
+// overridden or used as an attack vector.
+//
+if (Object.create) {
+  Events.prototype = Object.create(null);
+
+  //
+  // This hack is needed because the `__proto__` property is still inherited in
+  // some old browsers like Android 4, iPhone 5.1, Opera 11 and Safari 5.
+  //
+  if (!new Events().__proto__) prefix = false;
+}
+
+/**
+ * Representation of a single event listener.
+ *
+ * @param {Function} fn The listener function.
+ * @param {*} context The context to invoke the listener with.
+ * @param {Boolean} [once=false] Specify if the listener is a one-time listener.
+ * @constructor
+ * @private
+ */
+function EE(fn, context, once) {
+  this.fn = fn;
+  this.context = context;
+  this.once = once || false;
+}
+
+/**
+ * Add a listener for a given event.
+ *
+ * @param {EventEmitter} emitter Reference to the `EventEmitter` instance.
+ * @param {(String|Symbol)} event The event name.
+ * @param {Function} fn The listener function.
+ * @param {*} context The context to invoke the listener with.
+ * @param {Boolean} once Specify if the listener is a one-time listener.
+ * @returns {EventEmitter}
+ * @private
+ */
+function addListener(emitter, event, fn, context, once) {
+  if (typeof fn !== 'function') {
+    throw new TypeError('The listener must be a function');
+  }
+
+  var listener = new EE(fn, context || emitter, once)
+    , evt = prefix ? prefix + event : event;
+
+  if (!emitter._events[evt]) emitter._events[evt] = listener, emitter._eventsCount++;
+  else if (!emitter._events[evt].fn) emitter._events[evt].push(listener);
+  else emitter._events[evt] = [emitter._events[evt], listener];
+
+  return emitter;
+}
+
+/**
+ * Clear event by name.
+ *
+ * @param {EventEmitter} emitter Reference to the `EventEmitter` instance.
+ * @param {(String|Symbol)} evt The Event name.
+ * @private
+ */
+function clearEvent(emitter, evt) {
+  if (--emitter._eventsCount === 0) emitter._events = new Events();
+  else delete emitter._events[evt];
+}
+
+/**
+ * Minimal `EventEmitter` interface that is molded against the Node.js
+ * `EventEmitter` interface.
+ *
+ * @constructor
+ * @public
+ */
+function EventEmitter() {
+  this._events = new Events();
+  this._eventsCount = 0;
+}
+
+/**
+ * Return an array listing the events for which the emitter has registered
+ * listeners.
+ *
+ * @returns {Array}
+ * @public
+ */
+EventEmitter.prototype.eventNames = function eventNames() {
+  var names = []
+    , events
+    , name;
+
+  if (this._eventsCount === 0) return names;
+
+  for (name in (events = this._events)) {
+    if (has.call(events, name)) names.push(prefix ? name.slice(1) : name);
+  }
+
+  if (Object.getOwnPropertySymbols) {
+    return names.concat(Object.getOwnPropertySymbols(events));
+  }
+
+  return names;
+};
+
+/**
+ * Return the listeners registered for a given event.
+ *
+ * @param {(String|Symbol)} event The event name.
+ * @returns {Array} The registered listeners.
+ * @public
+ */
+EventEmitter.prototype.listeners = function listeners(event) {
+  var evt = prefix ? prefix + event : event
+    , handlers = this._events[evt];
+
+  if (!handlers) return [];
+  if (handlers.fn) return [handlers.fn];
+
+  for (var i = 0, l = handlers.length, ee = new Array(l); i < l; i++) {
+    ee[i] = handlers[i].fn;
+  }
+
+  return ee;
+};
+
+/**
+ * Return the number of listeners listening to a given event.
+ *
+ * @param {(String|Symbol)} event The event name.
+ * @returns {Number} The number of listeners.
+ * @public
+ */
+EventEmitter.prototype.listenerCount = function listenerCount(event) {
+  var evt = prefix ? prefix + event : event
+    , listeners = this._events[evt];
+
+  if (!listeners) return 0;
+  if (listeners.fn) return 1;
+  return listeners.length;
+};
+
+/**
+ * Calls each of the listeners registered for a given event.
+ *
+ * @param {(String|Symbol)} event The event name.
+ * @returns {Boolean} `true` if the event had listeners, else `false`.
+ * @public
+ */
+EventEmitter.prototype.emit = function emit(event, a1, a2, a3, a4, a5) {
+  var evt = prefix ? prefix + event : event;
+
+  if (!this._events[evt]) return false;
+
+  var listeners = this._events[evt]
+    , len = arguments.length
+    , args
+    , i;
+
+  if (listeners.fn) {
+    if (listeners.once) this.removeListener(event, listeners.fn, undefined, true);
+
+    switch (len) {
+      case 1: return listeners.fn.call(listeners.context), true;
+      case 2: return listeners.fn.call(listeners.context, a1), true;
+      case 3: return listeners.fn.call(listeners.context, a1, a2), true;
+      case 4: return listeners.fn.call(listeners.context, a1, a2, a3), true;
+      case 5: return listeners.fn.call(listeners.context, a1, a2, a3, a4), true;
+      case 6: return listeners.fn.call(listeners.context, a1, a2, a3, a4, a5), true;
+    }
+
+    for (i = 1, args = new Array(len -1); i < len; i++) {
+      args[i - 1] = arguments[i];
+    }
+
+    listeners.fn.apply(listeners.context, args);
+  } else {
+    var length = listeners.length
+      , j;
+
+    for (i = 0; i < length; i++) {
+      if (listeners[i].once) this.removeListener(event, listeners[i].fn, undefined, true);
+
+      switch (len) {
+        case 1: listeners[i].fn.call(listeners[i].context); break;
+        case 2: listeners[i].fn.call(listeners[i].context, a1); break;
+        case 3: listeners[i].fn.call(listeners[i].context, a1, a2); break;
+        case 4: listeners[i].fn.call(listeners[i].context, a1, a2, a3); break;
+        default:
+          if (!args) for (j = 1, args = new Array(len -1); j < len; j++) {
+            args[j - 1] = arguments[j];
+          }
+
+          listeners[i].fn.apply(listeners[i].context, args);
+      }
+    }
+  }
+
+  return true;
+};
+
+/**
+ * Add a listener for a given event.
+ *
+ * @param {(String|Symbol)} event The event name.
+ * @param {Function} fn The listener function.
+ * @param {*} [context=this] The context to invoke the listener with.
+ * @returns {EventEmitter} `this`.
+ * @public
+ */
+EventEmitter.prototype.on = function on(event, fn, context) {
+  return addListener(this, event, fn, context, false);
+};
+
+/**
+ * Add a one-time listener for a given event.
+ *
+ * @param {(String|Symbol)} event The event name.
+ * @param {Function} fn The listener function.
+ * @param {*} [context=this] The context to invoke the listener with.
+ * @returns {EventEmitter} `this`.
+ * @public
+ */
+EventEmitter.prototype.once = function once(event, fn, context) {
+  return addListener(this, event, fn, context, true);
+};
+
+/**
+ * Remove the listeners of a given event.
+ *
+ * @param {(String|Symbol)} event The event name.
+ * @param {Function} fn Only remove the listeners that match this function.
+ * @param {*} context Only remove the listeners that have this context.
+ * @param {Boolean} once Only remove one-time listeners.
+ * @returns {EventEmitter} `this`.
+ * @public
+ */
+EventEmitter.prototype.removeListener = function removeListener(event, fn, context, once) {
+  var evt = prefix ? prefix + event : event;
+
+  if (!this._events[evt]) return this;
+  if (!fn) {
+    clearEvent(this, evt);
+    return this;
+  }
+
+  var listeners = this._events[evt];
+
+  if (listeners.fn) {
+    if (
+      listeners.fn === fn &&
+      (!once || listeners.once) &&
+      (!context || listeners.context === context)
+    ) {
+      clearEvent(this, evt);
+    }
+  } else {
+    for (var i = 0, events = [], length = listeners.length; i < length; i++) {
+      if (
+        listeners[i].fn !== fn ||
+        (once && !listeners[i].once) ||
+        (context && listeners[i].context !== context)
+      ) {
+        events.push(listeners[i]);
+      }
+    }
+
+    //
+    // Reset the array, or remove it completely if we have no more listeners.
+    //
+    if (events.length) this._events[evt] = events.length === 1 ? events[0] : events;
+    else clearEvent(this, evt);
+  }
+
+  return this;
+};
+
+/**
+ * Remove all listeners, or those of the specified event.
+ *
+ * @param {(String|Symbol)} [event] The event name.
+ * @returns {EventEmitter} `this`.
+ * @public
+ */
+EventEmitter.prototype.removeAllListeners = function removeAllListeners(event) {
+  var evt;
+
+  if (event) {
+    evt = prefix ? prefix + event : event;
+    if (this._events[evt]) clearEvent(this, evt);
+  } else {
+    this._events = new Events();
+    this._eventsCount = 0;
+  }
+
+  return this;
+};
+
+//
+// Alias methods names because people roll like that.
+//
+EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+EventEmitter.prototype.addListener = EventEmitter.prototype.on;
+
+//
+// Expose the prefix.
+//
+EventEmitter.prefixed = prefix;
+
+//
+// Allow `EventEmitter` to be imported as module namespace.
+//
+EventEmitter.EventEmitter = EventEmitter;
+
+//
+// Expose the module.
+//
+if ('undefined' !== typeof module) {
+  module.exports = EventEmitter;
+}
+
+},{}],68:[function(require,module,exports){
 /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
@@ -9868,7 +10219,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],68:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 /**
  * @module  is-audio-buffer
  */
@@ -9885,7 +10236,7 @@ module.exports = function isAudioBuffer (buffer) {
 	&& typeof buffer.duration === 'number'
 };
 
-},{}],69:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 (function(root) {
   'use strict';
 
@@ -9927,9 +10278,9 @@ module.exports = function isAudioBuffer (buffer) {
   }
 })(this);
 
-},{}],70:[function(require,module,exports){
-module.exports = true;
 },{}],71:[function(require,module,exports){
+module.exports = true;
+},{}],72:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -9942,7 +10293,7 @@ module.exports = function isBuffer (obj) {
     typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
 }
 
-},{}],72:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 'use strict';
 var toString = Object.prototype.toString;
 
@@ -9951,7 +10302,7 @@ module.exports = function (x) {
 	return toString.call(x) === '[object Object]' && (prototype = Object.getPrototypeOf(x), prototype === null || prototype === Object.getPrototypeOf({}));
 };
 
-},{}],73:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 /** @module negative-index */
 var isNeg = require('negative-zero');
 
@@ -9959,11 +10310,11 @@ module.exports = function negIdx (idx, length) {
 	return idx == null ? 0 : isNeg(idx) ? length : idx <= -length ? 0 : idx < 0 ? (length + (idx % length)) : Math.min(length, idx);
 }
 
-},{"negative-zero":74}],74:[function(require,module,exports){
+},{"negative-zero":75}],75:[function(require,module,exports){
 'use strict';
 module.exports = x => Object.is(x, -0);
 
-},{}],75:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -10055,7 +10406,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10080,7 +10431,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 (0, _common.assignNames)(_OggOpusDecoder.default, "OggOpusDecoder");
 (0, _common.assignNames)(_OggOpusDecoderWebWorker.default, "OggOpusDecoderWebWorker");
 
-},{"./src/OggOpusDecoder.js":77,"./src/OggOpusDecoderWebWorker.js":78,"@wasm-audio-decoders/common":19}],77:[function(require,module,exports){
+},{"./src/OggOpusDecoder.js":78,"./src/OggOpusDecoderWebWorker.js":79,"@wasm-audio-decoders/common":19}],78:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10193,7 +10544,7 @@ class OggOpusDecoder {
 }
 exports.default = OggOpusDecoder;
 
-},{"@wasm-audio-decoders/common":19,"codec-parser":38,"opus-decoder":79}],78:[function(require,module,exports){
+},{"@wasm-audio-decoders/common":19,"codec-parser":38,"opus-decoder":80}],79:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10214,7 +10565,7 @@ class OggOpusDecoderWebWorker extends _OggOpusDecoder.default {
 }
 exports.default = OggOpusDecoderWebWorker;
 
-},{"./OggOpusDecoder.js":77,"opus-decoder":79}],79:[function(require,module,exports){
+},{"./OggOpusDecoder.js":78,"opus-decoder":80}],80:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10239,7 +10590,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 (0, _common.assignNames)(_OpusDecoder.default, "OpusDecoder");
 (0, _common.assignNames)(_OpusDecoderWebWorker.default, "OpusDecoderWebWorker");
 
-},{"./src/OpusDecoder.js":81,"./src/OpusDecoderWebWorker.js":82,"@wasm-audio-decoders/common":19}],80:[function(require,module,exports){
+},{"./src/OpusDecoder.js":82,"./src/OpusDecoderWebWorker.js":83,"@wasm-audio-decoders/common":19}],81:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10565,7 +10916,7 @@ JÏ8ð{=M´E«¤1ÇJËìFN	ÈAÇ4ÉÀà¦Ð)<×mu@ÒÛ/
   };
 }
 
-},{}],81:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10694,7 +11045,7 @@ function OpusDecoder(options = {}) {
   return this;
 }
 
-},{"./EmscriptenWasm.js":80,"@wasm-audio-decoders/common":19}],82:[function(require,module,exports){
+},{"./EmscriptenWasm.js":81,"@wasm-audio-decoders/common":19}],83:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -10718,7 +11069,7 @@ class OpusDecoderWebWorker extends _common.WASMAudioDecoderWorker {
 }
 exports.default = OpusDecoderWebWorker;
 
-},{"./EmscriptenWasm.js":80,"./OpusDecoder.js":81,"@wasm-audio-decoders/common":19}],83:[function(require,module,exports){
+},{"./EmscriptenWasm.js":81,"./OpusDecoder.js":82,"@wasm-audio-decoders/common":19}],84:[function(require,module,exports){
 exports.endianness = function () { return 'LE' };
 
 exports.hostname = function () {
@@ -10769,7 +11120,7 @@ exports.homedir = function () {
 	return '/'
 };
 
-},{}],84:[function(require,module,exports){
+},{}],85:[function(require,module,exports){
 /**
  * @module pcm-convert
  */
@@ -11056,9 +11407,9 @@ function normalize (obj) {
 	return obj
 }
 
-},{"assert":23,"audio-format":33,"is-audio-buffer":68,"is-buffer":85,"object-assign":75}],85:[function(require,module,exports){
+},{"assert":23,"audio-format":33,"is-audio-buffer":69,"is-buffer":86,"object-assign":76}],86:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34}],86:[function(require,module,exports){
+},{"dup":34}],87:[function(require,module,exports){
 'use strict'
 
 
@@ -11137,7 +11488,7 @@ function toList(arg) {
 	return arg
 }
 
-},{}],87:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -11323,7 +11674,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],88:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 module.exports={
 "8000": 8000,
 "11025": 11025,
@@ -11339,7 +11690,7 @@ module.exports={
 "384000": 384000
 }
 
-},{}],89:[function(require,module,exports){
+},{}],90:[function(require,module,exports){
 /**
  * @module  string-to-arraybuffer
  */
@@ -11403,7 +11754,7 @@ function decode(uri) {
 	return abuf
 }
 
-},{"atob-lite":27,"is-base64":69}],90:[function(require,module,exports){
+},{"atob-lite":27,"is-base64":70}],91:[function(require,module,exports){
 function compareTime(r,n){return r[0]-n[0]}function mergeRanges(r,n,e){return r.concat(e?Trp.mergeRange(r.pop(),n):[n])}function toRangeNum(r,n){return parseInt(r,36)/(n||1e3)}function passThrough(r){return r}function Trp(r,n){void 0!==r&&void 0!==n&&u(r,n);var e=this,t=void 0!==r&&void 0!==n,o=t?[[r,n]]:[];function u(r,n){if(void 0===r||void 0===n||Number.isNaN(r)||Number.isNaN(n))throw Error("Input parameters should be numbers.");if(n<r)throw Error("Start should be less than end.")}function a(r){if(r>=e.length)throw Error("Index is out of bounds.")}function i(r){var n=o.concat(Trp.toRangeArray(r));o=Trp.cleanUpRange(n),e.length=o.length}e.length=Number(t),e.add=function(r,n){u(r,n),o.push([r,n]),o=Trp.cleanUpRange(o),e.length=o.length},e.start=function(r){return a(r),o[r][0]},e.end=function(r){return a(r),o[r][1]},e.merge=function(r){(Array.isArray(r)?r:[r]).forEach(i)},e.toString=function(){return(o.length?"[[{0}]]":"[{0}]").replace("{0}",o.join("],["))},e.toDuration=function(){return[].concat.apply([],o).reduce(function(r,n,e){return r+n*(e%2?1:-1)},0)},e.pack=function(n,r){return(r||passThrough)([].concat.apply([],o).map(function(r){return Math.round(r*(n||1e3)).toString(36)}).join(":"))}}Trp.unpack=function(r,e,n){var t=new Trp;return(n||passThrough)(r).split(":").reduce(function(r,n){return null===r?n:(t.add(toRangeNum(r,e),toRangeNum(n,e)),null)},null),t},Trp.mergeRange=function(r,n){if(r[0]<=n[0]&&n[0]<=r[1])return[[r[0],r[1]<=n[1]?n[1]:r[1]]];if(r[1]<n[0])return[r,n];throw Error("Parameters need to be sorted via start date before passing.")},Trp.toRangeArray=function(e){return new Array(e.length).fill().map(function(r,n){return[e.start(n),e.end(n)]})},Trp.cleanUpRange=function(r){return r.sort(compareTime).reduce(mergeRanges,[])},Trp.wrap=function(r){var n=new Trp;return Trp.toRangeArray(r).forEach(function(r){n.add(r[0],r[1])}),n},module.exports=Trp;
 },{}]},{},[1])(1)
 });
