@@ -21,3 +21,29 @@ Then, run this script to launch the test server:
 ```sh
 npm run serve
 ```
+
+## TODOs
+
+### Playback Controls
+- [x] play
+- [x] seek
+- [x] pause
+- [x] stop
+- [x] resume
+
+### Time
+- [x] playback duration tracking
+- [x] `TimeRanges` tracking
+- [x] `AudioContext` newEvent/endEvent
+
+### Events
+#### `MediaElement`
+- [ ] `play`
+- [ ] `pause`
+- [ ] `stop`
+- [ ] `canplay`/`canplaythrough`
+- [ ] `waiting`
+- [ ] `seeked`
+#### `CustomEvent`
+- [ ] `new-message`
+- [ ] `message-ready`

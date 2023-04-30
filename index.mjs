@@ -10,11 +10,10 @@ import '@storyboard-fm/audio-core-library'
  * and easy playback via the Web Audio API.
  */
 class FeedDecoder {
-    constructor(feed='') {
+    constructor(feed='', ctx=null) {
         this.feed = feed
         this.messages = {}
-        this.ctx = new AudioContext()
-        // this.ctx.toggle()
+        this.ctx = ctx || new AudioContext()
         this.progress = 0
         this.played = new Trp()
     }
@@ -38,6 +37,7 @@ class FeedDecoder {
             chunks.map(c => abf(c.channelData[0], { sampleRate: 48000 }))
         )
         return bufs.join()
+        // TODO dispatch 'message-ready' event
     }
     playMessage(url, seek=0) {
         this._prepareCtx()
@@ -47,9 +47,9 @@ class FeedDecoder {
         srcNode.connect(this.ctx.destination)
         this.srcNode = srcNode
         this._startSrcNode(0, seek)
-        // srcNode.start(0, seek)
     }
     _startSrcNode(when=0, seek=0) {
+        // TODO: 'play' event
         if (!this.srcNode) return
         this._prepareCtx()
         this.srcNode.start(when, seek)
@@ -58,6 +58,7 @@ class FeedDecoder {
         this.ctx.newEvent('streamplayer-play')
     }
     _stopBuffer() {
+        // TODO: 'stop' event
         if (!this.srcNode) return
         this.srcNode.onended = () => {
             this.ctx.endEvent('streamplayer-play')
@@ -69,6 +70,7 @@ class FeedDecoder {
         this.srcNode.stop()
     }
     _pauseBuffer() {
+        // TODO: 'pause' event
         if (!this.srcNode) return
         this.srcNode.onended = () => {
             this.ctx.endEvent('streamplayer-play')
@@ -76,11 +78,11 @@ class FeedDecoder {
             this.played.add(begin - begin, end - begin)
             this.progress += (end - begin)
             this.paused = true
-            console.log('paused playhead at', this.progress)
         }
         this.srcNode.stop()
     }
     _playBuffer(ab, seek=0) {
+        // TODO: 'waiting' event
         const srcNode = this.ctx.createBufferSource()
         srcNode.buffer = ab
         srcNode.connect(this.ctx.destination)
@@ -100,7 +102,6 @@ class FeedDecoder {
     _seekBuffer(seek) {
         if (!this.srcNode) return
         this._pauseBuffer()
-        // this.srcNode.stop()
         const bufferToSeek = this.srcNode.buffer
         const newSrcNode = this.ctx.createBufferSource()
         newSrcNode.buffer = bufferToSeek
