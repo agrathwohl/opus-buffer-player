@@ -184,13 +184,14 @@ var FeedDecoder = /*#__PURE__*/function () {
     key: "_seekBuffer",
     value: function _seekBuffer(seek) {
       if (!this.srcNode) return;
-      this.srcNode.stop();
+      this._pauseBuffer();
+      // this.srcNode.stop()
       var bufferToSeek = this.srcNode.buffer;
       var newSrcNode = this.ctx.createBufferSource();
       newSrcNode.buffer = bufferToSeek;
       newSrcNode.connect(this.ctx.destination);
       this.srcNode = newSrcNode;
-      this._startSrcNode(0, seek);
+      this._startSrcNode(0, seek + this.progress);
     }
   }]);
   return FeedDecoder;
