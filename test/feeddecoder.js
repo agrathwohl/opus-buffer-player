@@ -35,6 +35,7 @@ var FeedDecoder = /*#__PURE__*/function () {
     this.messages = {};
     this.ctx = ctx || new AudioContext();
     this.progress = 0;
+    this.playhead = 0;
     this.played = new _timerangesPlus["default"]();
     this.e = new _eventemitter["default"]();
   }
@@ -65,7 +66,7 @@ var FeedDecoder = /*#__PURE__*/function () {
               return this._onNewMessageChunks(opusChunks);
             case 5:
               this.messages[url] = _context.sent;
-              this.e.emit('new-message');
+              this.e.emit('canplaythrough', url);
               // TODO dispatch 'new-message' event
             case 7:
             case "end":
@@ -92,13 +93,12 @@ var FeedDecoder = /*#__PURE__*/function () {
                   sampleRate: 48000
                 });
               }));
-              this.e.emit('message-ready');
               return _context2.abrupt("return", bufs.join());
-            case 4:
+            case 3:
             case "end":
               return _context2.stop();
           }
-        }, _callee2, this);
+        }, _callee2);
       }));
       function _onNewMessageChunks(_x2) {
         return _onNewMessageChunks2.apply(this, arguments);
@@ -127,14 +127,17 @@ var FeedDecoder = /*#__PURE__*/function () {
     value: function _startSrcNode() {
       var when = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;
       var seek = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
-      // TODO: 'play' event
       if (!this.srcNode) return;
       this._prepareCtx();
       var oldProgress = this.progress;
+      var oldPlayhead = this.playhead;
+      console.log('oldprog,play', oldProgress, oldPlayhead);
       this.srcNode.start(when, seek);
       this.progress = seek;
+      this.playhead = this.progress;
       this.ctx.newEvent('streamplayer-play');
-      if (oldProgress !== this.progress) this.e.emit('seeked');
+      // if (oldProgress !== this.progress) this.e.emit('seeked')
+      if (oldPlayhead !== this.playhead) this.e.emit('seeked');
       this._startProgressTracker();
       this.e.emit('play');
       this.playing = true;
@@ -163,6 +166,7 @@ var FeedDecoder = /*#__PURE__*/function () {
         _this.seeking = false;
         _this.paused = false;
         _this.srcNode = null;
+        cancelAnimationFrame(_this.rAF);
       };
       this.srcNode.stop();
     }
@@ -179,8 +183,10 @@ var FeedDecoder = /*#__PURE__*/function () {
           end = _this2$ctx$_eventTimi.end;
         _this2.played.add(begin - begin, end - begin);
         _this2.progress = _this2.playhead;
-        _this2.paused = true;
-        _this2.playing = false;
+        if (!_this2.seeking) {
+          _this2.paused = true;
+          _this2.playing = false;
+        }
       };
       cancelAnimationFrame(this.rAF);
       this.srcNode.stop();
@@ -238,7 +244,7 @@ var FeedDecoder = /*#__PURE__*/function () {
           _this3.playhead = progressSnapshot + elapsed;
           _this3.e.emit('timeupdate', _this3.playhead);
           // Keep going until we reach end of audio buffer
-          if (!_this3.paused && !_this3.seeking && ts.contextTime - startTime < _this3.srcNode.buffer.duration) {
+          if (!_this3.paused && ts.contextTime - startTime < _this3.srcNode.buffer.duration) {
             _this3.rAF = requestAnimationFrame(outputTimestamps); // Reregister itself
           } else {
             cancelAnimationFrame(_this3.rAF);

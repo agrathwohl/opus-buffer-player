@@ -16,6 +16,7 @@ class FeedDecoder {
         this.messages = {}
         this.ctx = ctx || new AudioContext()
         this.progress = 0
+        this.playhead = 0
         this.played = new Trp()
         this.e = new EventEmitter()
     }
@@ -60,10 +61,14 @@ class FeedDecoder {
         if (!this.srcNode) return
         this._prepareCtx()
         const oldProgress = this.progress
+        const oldPlayhead = this.playhead
+        console.log('oldprog,play', oldProgress, oldPlayhead)
         this.srcNode.start(when, seek)
         this.progress = seek
+        this.playhead = this.progress
         this.ctx.newEvent('streamplayer-play')
-        if (oldProgress !== this.progress) this.e.emit('seeked')
+        // if (oldProgress !== this.progress) this.e.emit('seeked')
+        if (oldPlayhead !== this.playhead) this.e.emit('seeked')
         this._startProgressTracker()
         this.e.emit('play')
         this.playing = true
@@ -82,6 +87,7 @@ class FeedDecoder {
             const { begin, end } = this.ctx._eventTimings['streamplayer-play']
             this.played.add(begin - begin, end - begin)
             this.progress = 0
+            this.playhead = 0
             this.e.emit('stop')
             this.playing = false
             this.seeking = false
@@ -98,8 +104,10 @@ class FeedDecoder {
             const { begin, end } = this.ctx._eventTimings['streamplayer-play']
             this.played.add(begin - begin, end - begin)
             this.progress = this.playhead
-            this.paused = true
-            this.playing = false
+            if (!this.seeking) {
+                this.paused = true
+                this.playing = false
+            }
         }
         cancelAnimationFrame(this.rAF)
         this.srcNode.stop()
@@ -133,7 +141,7 @@ class FeedDecoder {
         newSrcNode.buffer = bufferToSeek
         newSrcNode.connect(this.ctx.destination)
         this.srcNode = newSrcNode
-        this._startSrcNode(0 + this.ctx.baseLatency, seek + this.playhead)
+        this._startSrcNode(0, seek + this.playhead)
     }
     _startProgressTracker() {
         const startTime = this.ctx.getOutputTimestamp().contextTime
@@ -148,7 +156,6 @@ class FeedDecoder {
               this.e.emit('timeupdate', this.playhead)
               // Keep going until we reach end of audio buffer
               if (!this.paused &&
-                  !this.seeking &&
                   ts.contextTime - startTime < this.srcNode.buffer.duration) {
                 this.rAF = requestAnimationFrame(outputTimestamps); // Reregister itself
               } else {
