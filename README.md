@@ -22,6 +22,13 @@ Then, run this script to launch the test server:
 npm run serve
 ```
 
+### Generating bundles
+Create distributions of these modules by running:
+
+```sh
+npm run dist
+```
+
 ## Implementation Guide
 > This repo provides a `FeedDecoder` class and a `DecodeWorker` Web Worker.
 
@@ -52,6 +59,7 @@ Before we can do anything with the decoded audio returned by our Web Worker, we
 need to also instantiate a class instance of `FeedDecoder`. This class should
 *also* be loaded immediately after page load.
 
+#### Instantiation
 Setup the class this way:
 
 ```js
@@ -62,7 +70,8 @@ const decoder = new FeedDecoder({feed: 'feedId'})
 // const decoder = new FD({feed: 'feedId'})
 ```
 
-Listen on the web worker to send new audio to the feed decoder class instance:
+##### Play audio from the `DecodeWorker`
+Listen on the web worker to send new audio to the feed decoder class instance.
 
 ```js
 decodeWorker.onmessage = async function (chunks) {
@@ -71,12 +80,29 @@ decodeWorker.onmessage = async function (chunks) {
 
   // Save the audio buffer to the FeedDecoder's `messages` object
   decoder.messages[messageId] = audioBuffer
-
-  // Play the audio:
-  decoder._playBuffer(audioBuffer)
 }
 ```
 
+Using `FeedDecoder` you can store AudioBuffers from new feed items and recall
+them at any time during the user session, via the `playMessage()` method.
+
+```js
+// This allows you to easily play the content by keying its URL or message ID
+decoder.playMessage(messageId, seek=0)
+// or you can play from any valid seek point in the audio:
+decoder.playMessage(messageId, seek=30)
+```
+
+Standard audio player controls are provided:
+
+```js
+decoder._pauseBuffer() // Pauses playback at playhead position
+decoder._resumeBuffer() // Resumes playback at playhead after pausing
+decoder._stopBuffer() // Stops playback entirely and returns playhead to 0
+decoder._seekBuffer(seekAmount) // seekAmount can be any positive or negative float
+```
+
+##### Playback events
 You can setup some event listeners for audio playback too:
 
 ```js
@@ -84,6 +110,16 @@ decoder.e.on('play', () => console.log('play emitted'))
 decoder.e.on('pause', () => console.log('pause emitted'))
 decoder.e.on('stop', () => console.log('stop emitted'))
 decoder.e.on('seek', () => console.log('seek emitted'))
+```
+
+###### Tracking Progress
+Use the `timeupdate` event to track the current playhead position for the loaded
+audio buffer.
+
+```js
+decoder.e.on('timeupdate', (t) => {
+  console.log(`current playhead position is: `${t}`)
+})
 ```
 
 ## TODOs
