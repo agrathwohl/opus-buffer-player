@@ -89,6 +89,7 @@ class FeedDecoder {
             this.progress = 0
             this.playhead = 0
             this.e.emit('stop')
+            this.e.emit('timeupdate', this.playhead)
             this.playing = false
             this.seeking = false
             this.paused = false

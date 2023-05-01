@@ -161,12 +161,13 @@ var FeedDecoder = /*#__PURE__*/function () {
           end = _this$ctx$_eventTimin.end;
         _this.played.add(begin - begin, end - begin);
         _this.progress = 0;
+        _this.playhead = 0;
         _this.e.emit('stop');
+        _this.e.emit('timeupdate', _this.playhead);
         _this.playing = false;
         _this.seeking = false;
         _this.paused = false;
         _this.srcNode = null;
-        cancelAnimationFrame(_this.rAF);
       };
       this.srcNode.stop();
     }
