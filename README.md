@@ -1,4 +1,4 @@
-# `FeedDecoder`
+# `opus-buffer-player`
 
 A feed decoding class. Converts new opus audio messages into AudioBuffer for immediate playback.
 
